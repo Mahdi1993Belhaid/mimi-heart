@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Heart Particles for MIMI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Great+Vibes&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #262626;
+      overflow: hidden;
+      position: relative;
+      cursor: pointer; /* indicate user can click */
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+    }
+    .mimi-text {
+      position: absolute;
+      z-index: 2;
+      font-size: 5em;
+      font-family: 'Great Vibes', cursive;
+      background: linear-gradient(45deg, #ff1493, #ff69b4);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      text-transform: capitalize;
+      letter-spacing: 3px;
+      animation: pulse 3s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.9; }
+    }
+    audio { display: none; } /* hide audio element */
+    #start-overlay {
+      position: fixed;
+      top:0; left:0; width:100%; height:100%;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 2rem;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+  <div id="start-overlay">Click anywhere to start the music 🎵</div>
+  <div class="mimi-text">MIMI</div>
+  <canvas id="pinkboard"></canvas>
+  <audio id="background-music" loop>
+    <source src="SAMIR TOUMI  MERIOUMA.mp3" type="audio/mpeg">
+    Your browser does not support the audio element.
+  </audio>
+
+  <script>
+    // =========================
+    // Play audio on user gesture
+    // =========================
+    const overlay = document.getElementById('start-overlay');
+    const audio = document.getElementById('background-music');
+    overlay.addEventListener('click', () => {
+      audio.play();           // start music
+      overlay.style.display = 'none'; // hide overlay
+    }, { once: true });
+
+    // =========================
+    // Your central heart particle system
+    // =========================
+    var settings = {
+      particles: { length: 10000, duration: 4, velocity: 80, effect: -1.3, size: 12 }
+    };
+    (function() {
+      var b=0; var c=["ms","moz","webkit","o"];
+      for(var a=0;a<c.length&&!window.requestAnimationFrame;++a){
+        window.requestAnimationFrame=window[c[a]+"RequestAnimationFrame"];
+        window.cancelAnimationFrame=window[c[a]+"CancelAnimationFrame"]||window[c[a]+"CancelRequestAnimationFrame"];
+      }
+      if(!window.requestAnimationFrame){
+        window.requestAnimationFrame=function(h,e){var d=new Date().getTime();var f=Math.max(0,16-(d-b));var g=setTimeout(function(){h(d+f)},f);b=d+f;return g;}
+      }
+      if(!window.cancelAnimationFrame){ window.cancelAnimationFrame=function(d){clearTimeout(d); } }
+    })();
+
+    // Point, Particle, ParticlePool classes here (unchanged)...
+    // (Copy all your existing central heart canvas code)
+    var Point = (function() {
+      function Point(x, y) { this.x = x || 0; this.y = y || 0; }
+      Point.prototype.clone = function(){ return new Point(this.x, this.y);}
+      Point.prototype.length=function(l){ if(l===undefined) return Math.sqrt(this.x*this.x+this.y*this.y); this.normalize(); this.x*=l; this.y*=l; return this;}
+      Point.prototype.normalize=function(){ var len=this.length(); this.x/=len; this.y/=len; return this;}
+      return Point;
+    })();
+
+    var Particle = (function(){ 
+      function Particle(){ this.position=new Point(); this.velocity=new Point(); this.acceleration=new Point(); this.age=0;}
+      Particle.prototype.initialize=function(x,y,dx,dy){this.position.x=x; this.position.y=y; this.velocity.x=dx; this.velocity.y=dy; this.acceleration.x=dx*settings.particles.effect; this.acceleration.y=dy*settings.particles.effect; this.age=0;}
+      Particle.prototype.update=function(dt){ this.position.x+=this.velocity.x*dt; this.position.y+=this.velocity.y*dt; this.velocity.x+=this.acceleration.x*dt; this.velocity.y+=this.acceleration.y*dt; this.age+=dt;}
+      Particle.prototype.draw=function(ctx,img){ function ease(t){return --t*t*t+1;} var size=img.width*ease(this.age/settings.particles.duration); ctx.globalAlpha=1-this.age/settings.particles.duration; ctx.drawImage(img,this.position.x-size/2,this.position.y-size/2,size,size);}
+      return Particle;
+    })();
+
+    var ParticlePool = (function(){
+      var particles, firstActive=0, firstFree=0, duration=settings.particles.duration;
+      function ParticlePool(len){ particles=new Array(len); for(var i=0;i<len;i++) particles[i]=new Particle();}
+      ParticlePool.prototype.add=function(x,y,dx,dy){ particles[firstFree].initialize(x,y,dx,dy); firstFree++; if(firstFree==particles.length) firstFree=0; if(firstActive==firstFree) firstActive++; if(firstActive==particles.length) firstActive=0; }
+      ParticlePool.prototype.update=function(dt){ var i; if(firstActive<firstFree){for(i=firstActive;i<firstFree;i++) particles[i].update(dt);} if(firstFree<firstActive){for(i=firstActive;i<particles.length;i++) particles[i].update(dt); for(i=0;i<firstFree;i++) particles[i].update(dt);} while(particles[firstActive].age>=duration && firstActive!=firstFree){ firstActive++; if(firstActive==particles.length) firstActive=0;}}
+      ParticlePool.prototype.draw=function(ctx,img){ if(firstActive<firstFree){for(var i=firstActive;i<firstFree;i++) particles[i].draw(ctx,img);} if(firstFree<firstActive){for(var i=firstActive;i<particles.length;i++) particles[i].draw(ctx,img); for(var i=0;i<firstFree;i++) particles[i].draw(ctx,img);}}
+      return ParticlePool;
+    })();
+
+    (function(canvas){
+      var ctx=canvas.getContext("2d"), particles=new ParticlePool(settings.particles.length), particleRate=settings.particles.length/settings.particles.duration, time;
+      function pointOnHeart(t){return new Point(160*Math.pow(Math.sin(t),3),130*Math.cos(t)-50*Math.cos(2*t)-20*Math.cos(3*t)-10*Math.cos(4*t)+25);}
+      var image=(function(){ var c=document.createElement("canvas"); var ctx2=c.getContext("2d"); c.width=settings.particles.size; c.height=settings.particles.size;
+        function to(t){ var p=pointOnHeart(t); p.x=settings.particles.size/2+(p.x*settings.particles.size)/350; p.y=settings.particles.size/2-(p.y*settings.particles.size)/350; return p;}
+        ctx2.beginPath(); var t=-Math.PI; var p=to(t); ctx2.moveTo(p.x,p.y); while(t<Math.PI){ t+=0.01; p=to(t); ctx2.lineTo(p.x,p.y);} ctx2.closePath(); ctx2.fillStyle="#f50b02"; ctx2.fill(); var img=new Image(); img.src=c.toDataURL(); return img;
+      })();
+
+      function render(){ requestAnimationFrame(render); var newTime=new Date().getTime()/1000; var dt=newTime-(time||newTime); time=newTime; ctx.clearRect(0,0,canvas.width,canvas.height); var amount=particleRate*dt; for(var i=0;i<amount;i++){ var pos=pointOnHeart(Math.PI-2*Math.PI*Math.random()); var dir=pos.clone().length(settings.particles.velocity); particles.add(canvas.width/2+pos.x, canvas.height/2-pos.y, dir.x, -dir.y);} particles.update(dt); particles.draw(ctx,image);}
+      function onResize(){ canvas.width=window.innerWidth; canvas.height=window.innerHeight;}
+      window.onresize=onResize; setTimeout(()=>{onResize(); render();},10);
+    })(document.getElementById("pinkboard"));
+
+  </script>
+</body>
+</html>
